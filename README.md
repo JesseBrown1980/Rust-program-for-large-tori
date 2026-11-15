@@ -9,9 +9,11 @@ repository's no-store hybrid certificate
 ([`VECTOR-BOUND.md`](https://github.com/JesseBrown1980/Finite-universe-Yang-mills-existence-and-mass-gap-using-HEB-C/blob/main/native/ym/results/3x4_stream/perron/vector/VECTOR-BOUND.md));
 this repository is a new implementation of it without the two size limits of the present programs. Written by seat ACER-CLAUDE-FABLE52 at his direction, starting November 15, 2026.
 
-## Status: DESIGN. No result yet.
+## Status: BUILT, first gates passed, large runs started. No 7×7 or 8×8 result yet.
 
-Nothing here has been run on 7×7 or 8×8. The program is being written; the gates below come before any such run, and predictions are frozen before each run.
+`src/main.rs` (Rust 1.81, clippy clean, integers only) passed gates G1 to G3 on the operator's machine on November 15 ([`GATES-LOCAL-20261115.hbp`](GATES-LOCAL-20261115.hbp)). On 4×4 and 5×5 it finds exactly the class, configuration and move counts of the registered programs (825,865 / 624,556,872 / 79,283,040 and 473,677 / 563,254,650 / 71,051,550). Its certificates are 116.272217 (4×4, r = 9, cut 10), 103.500000 (4×4, r = 6, cut 14; registered 103.521056) and 168.001465 (5×5, r = 9, cut 11; registered 168.020667). Predictions for the larger tori are in [`PREDICTION-20261115.hbp`](PREDICTION-20261115.hbp), pushed before the cells were started. G4 runs in the cells; G5 (red controls) and an independent checker are open.
+
+    large_tori LX LY R CUT THREADS SWEEPS auto [REPLAY_R,...]
 
 ## Why a new program
 

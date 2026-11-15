@@ -1,0 +1,56 @@
+name: large tori, hosted cells
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - TRIGGER.txt
+
+permissions:
+  contents: read
+
+jobs:
+  point:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        args:
+          - "6 6 9 11"
+          - "7 7 12 10"
+          - "7 7 12 11"
+          - "7 7 16 10"
+          - "8 8 16 10"
+          - "8 8 24 10"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Rust 1.81, clippy and build
+        run: |
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          sha256sum src/main.rs
+          cargo +1.81.0 clippy --release -- -D warnings
+          cargo +1.81.0 build --release
+      - name: gate, 4x4 at r = 9, cut 10
+        run: |
+          ./target/release/large_tori 4 4 9 10 4 300 auto 9,10,12,16 | tee gate.hbp
+          python3 -I - <<'PY'
+          rows = {l.split('|')[0]: dict(kv.split('=', 1) for kv in l.strip().split('|')[1:] if '=' in kv) for l in open('gate.hbp') if l.startswith(('BIG_SPACE', 'BIG_CERT'))}
+          s, c = rows['BIG_SPACE'], rows['BIG_CERT']
+          # the counts of the registered programs at this cut, and the certificate measured before the cells were started
+          assert s['classes'] == '10269' and s['configs_in_the_cut'] == '6919488' and s['lumps_with_a_wrong_count'] == '0' and s['moves_per_class_is_3nl'] == '1', s
+          assert c['vector_positive'] == '1' and abs(int(c['E9_lower_micro']) - 116272217) <= 1000 and int(c['E9_lower_micro']) <= 117580284, c
+          print('GATE|4x4_r9_cut10_counts_and_certificate=1|certificate_equal_to_116272217=%d|json=0' % int(c['E9_lower_micro'] == '116272217'))
+          PY
+      - name: the point
+        run: |
+          set -- ${{ matrix.args }}
+          nproc; free -m | head -2
+          /usr/bin/time -v ./target/release/large_tori $1 $2 $3 $4 4 300 auto $3,$(( $3 + 1 )),$(( $3 + 4 )),$(( 2 * $3 )) 2> time.txt | tee rows.hbp
+          grep -E "Elapsed|Maximum resident" time.txt | tee -a rows.hbp
+          grep -q "^BIG_CERT|" rows.hbp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: big-${{ strategy.job-index }}
+          path: rows.hbp
