@@ -1,0 +1,6 @@
+EXTREME_ROW_NEGATIVE|low_orbit_min_instead_of_max=REFUSED|false_x0_constraint=REFUSED|real_integer_counterexample_to_x0=PASS|json=0
+EXTREME_ROW_ORACLE|L=4|mode=product|lumps=80|vertices=458|integer_points=6087|ratio_minus_flat=657/32|winning_lump=0,1|all_integer_rows_dominate_relaxed_vertices=PASS|json=0
+EXTREME_ROW_ORACLE|L=4|mode=hybrid|lumps=80|vertices=458|integer_points=6087|ratio_minus_flat=-639/7|winning_lump=4,1|all_integer_rows_dominate_relaxed_vertices=PASS|json=0
+EXTREME_ROW_ORACLE|L=5|mode=hybrid|lumps=181|vertices=1385|integer_points=61541|ratio_minus_flat=-2656/23|winning_lump=2,0|all_integer_rows_dominate_relaxed_vertices=PASS|json=0
+EXTREME_ROW_ORACLE|L=6|mode=hybrid|lumps=360|vertices=3048|integer_points=0|ratio_minus_flat=-4280/23|winning_lump=2,0|all_integer_rows_dominate_relaxed_vertices=PASS|json=0
+EXTREME_ROW_DONE|independent_S3_moves=PASS|exact_vertex_lower_bound=PASS|hybrid_low_lump_max=PASS|full_G1_G5_hybrid_certificate=NOT_COMPUTED|large_torus_gap=NOT_COMPUTED|json=0
