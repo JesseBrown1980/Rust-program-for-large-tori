@@ -18,7 +18,7 @@ Lower ends of `E₉ − E₈` in units of `J_E`, with each original producer res
 | Torus | r | Cut | Classes | E₉ − E₈ ≥ | 3r − 21/r | Producer time | Independent vector replay |
 |---|---:|---:|---:|---:|---:|---|---|
 | 6×6 | 9 | 11 | 2,257,839 | **16.904567** | 24.67 | 35 min | **PENDING**: original dump rerun still active |
-| 7×7 | 12 | 10 | 337,082 | **28.965224** | 35.25 | 1 min 40 s | **PASS**, [32-job run 43725543227](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725543227) |
+| 7×7 | 12 | 10 | 337,082 | **28.965224** | 35.25 | 1 min 40 s | **PASS**, [32-shard run 43725543227](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725543227) |
 | 7×7 | 16 | 10 | 337,082 | **45.207828** | 46.69 | 2 min 20 s | **PASS**, [run 43725543227](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725543227) |
 | 8×8 | 16 | 10 | 766,866 | **44.345382** | 46.69 | 5 min 21 s | **PASS**, [66-job run 43726083659](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43726083659) |
 | 8×8 | 24 | 10 | 766,866 | **70.648926** | 71.13 | 6 min 31 s | **PASS**, [run 43726083659](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43726083659) |
