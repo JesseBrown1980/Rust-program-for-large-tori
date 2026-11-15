@@ -9,19 +9,36 @@ repository's no-store hybrid certificate
 ([`VECTOR-BOUND.md`](https://github.com/JesseBrown1980/Finite-universe-Yang-mills-existence-and-mass-gap-using-HEB-C/blob/main/native/ym/results/3x4_stream/perron/vector/VECTOR-BOUND.md));
 this repository is a new implementation of it without the two size limits of the present programs. Written by seat ACER-CLAUDE-FABLE52 at his direction, starting November 15, 2026.
 
-## Status: first certificates on 6×6, 7×7 and 8×8, as this program's own; independent check in progress
+## Status: independently verified 7×7 and 8×8 certificates; 6×6 awaiting its original vector replay
 
-Lower ends of E₉ − E₈ in J_E, measured on GitHub cells on November 15, 2026 with predictions pushed first ([`PREDICTION-20261115.hbp`](PREDICTION-20261115.hbp), [`RESULT-20261115.hbp`](RESULT-20261115.hbp)). On every row each lump inside the cut holds exactly its count of configurations.
+The producer's first large-torus cells were registered and predicted before their runs ([`PREDICTION-20261115.hbp`](PREDICTION-20261115.hbp), [`RESULT-20261115.hbp`](RESULT-20261115.hbp)). The original `HYBRID_BIG` fitted vectors were then frozen with SHA-256 in [dump run 43724776455](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43724776455). **A separately authored Rust 1.81 checker independently reconstructed the complete source of both 7×7 and both 8×8 certificates.** Their exact full-source receipts, including a refusal of a claim increased by one micro-unit, are in [issue #3](https://github.com/JesseBrown1980/Rust-program-for-large-tori/issues/3#issuecomment-6896426194).
 
-| Torus | r | Cut | Classes | E₉ − E₈ ≥ | 3r − 21/r | Time |
-|---|---:|---:|---:|---:|---:|---|
-| 6×6 | 9 | 11 | 2,257,839 | **16.904567** | 24.67 | 35 min |
-| 7×7 | 12 | 10 | 337,082 | **28.965224** | 35.25 | 1 min 40 s |
-| 7×7 | 16 | 10 | 337,082 | **45.207828** | 46.69 | 2 min 20 s |
-| 8×8 | 16 | 10 | 766,866 | **44.345382** | 46.69 | 5 min 21 s |
-| 8×8 | 24 | 10 | 766,866 | **70.648926** | 71.13 | 6 min 31 s |
+Lower ends of `E₉ − E₈` in units of `J_E`, with each original producer result and its independent verdict:
 
-**What these are, and are not.** Each is a certificate printed by this one program for one finite torus. The program passed its gates G1 to G3 on 4×4 and 5×5 against the registered programs ([`GATES-LOCAL-20261115.hbp`](GATES-LOCAL-20261115.hbp): identical class, configuration and move counts, certificates within 0.02). GPT-6, on another model, has written a separate checker (pull request 4) and verified a 4×4 vector with it; the 6×6, 7×7 and 8×8 vectors have **not** been checked independently yet. The cells of `dump-cells.yml` rerun these points with the vector written out for that check. Gate G4 gave no comparison: the widened copies of the earlier tools return valid bounds far below the flat level on 6×6 (80.0 J_E where the flat level is 216), so they cannot confirm or contradict these numbers.
+| Torus | r | Cut | Classes | E₉ − E₈ ≥ | 3r − 21/r | Producer time | Independent vector replay |
+|---|---:|---:|---:|---:|---:|---|---|
+| 6×6 | 9 | 11 | 2,257,839 | **16.904567** | 24.67 | 35 min | **PENDING**: original dump rerun still active |
+| 7×7 | 12 | 10 | 337,082 | **28.965224** | 35.25 | 1 min 40 s | **PASS**, [32-shard run 43725543227](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725543227) |
+| 7×7 | 16 | 10 | 337,082 | **45.207828** | 46.69 | 2 min 20 s | **PASS**, [run 43725543227](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725543227) |
+| 8×8 | 16 | 10 | 766,866 | **44.345382** | 46.69 | 5 min 21 s | **PASS**, [66-job run 43726083659](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43726083659) |
+| 8×8 | 24 | 10 | 766,866 | **70.648926** | 71.13 | 6 min 31 s | **PASS**, [run 43726083659](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43726083659) |
+
+### Separate full-source vector checker, actual frozen producer data
+
+The [independent verifier in draft PR #4](https://github.com/JesseBrown1980/Rust-program-for-large-tori/pull/4), `src/bin/vectorcheck.rs`, has its own six-element S₃, link geometry, spanning-tree gauge, canonical class, orbit-size computation and exact electric-row enumerator. For high-cut rows it independently enumerates the relaxed rational vertices, taking the **largest actual low-cut orbit vector entry** for any transition into that low lump. Its final fan-in requires every disjoint source shard, the original uncompressed vector SHA-256, complete raw-move counts, exact matching minima, and **REFUSAL of the claim +1 micro-unit**.
+
+| Original vector | Independently matched `E₉` floor (`J_E`) | Exact classes checked | Raw electric moves rebuilt | Verification |
+|---|---:|---:|---:|---|
+| 4×4, r=9, cut=10 | **116.272217** | 10,269 | 985,824 | [Original vector replay 43725375166](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725375166) PASS |
+| 5×5, r=9, cut=11 | **168.034092** | 473,677 | 71,051,550 | [Independent full check 43726465339](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43726465339) PASS |
+| 7×7, r=12, cut=10 | **317.469462** | 337,082 | 99,102,108 | [Full check 43725543227](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725543227) PASS |
+| 7×7, r=16, cut=10 | **334.903559** | 337,082 | 99,102,108 | [Full check 43725543227](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43725543227) PASS |
+| 8×8, r=16, cut=10 | **422.822056** | 766,866 | 294,476,544 | [Full check 43726083659](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43726083659) PASS |
+| 8×8, r=24, cut=10 | **450.803001** | 766,866 | 294,476,544 | [Full check 43726083659](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43726083659) PASS |
+
+These are **source-conditional finite-volume spectral lower bounds** based on the registered Perron/Barta and eight-flat-sector comparisons. The 6×6 producer number remains a separate pending second-seat check: widened earlier tools gave very loose valid bounds (80, 81 and −217 versus flat energy 216), so the old comparison gate provides no numerical confirmation.
+
+The [independent high-lump oracle PR #1](https://github.com/JesseBrown1980/Rust-program-for-large-tori/pull/1) and [planted Rust fault-control PR #2](https://github.com/JesseBrown1980/Rust-program-for-large-tori/pull/2) have hosted PASS results and remain in review. The separately authored vectorchecker PR #4 also remains in review; its complete hosted receipts establish the numerical second-seat results regardless of merge status.
 
 Predictions: P1, P2, P4 met; P5 missed high (8×8 at r = 24 came in above the predicted band); P6 missed high on 8×8 (more classes than predicted); P3 pending.
 
@@ -50,18 +67,17 @@ The present tools (`ritz` and `hybridcheck` in the main repository) certified 4�
    trust. E₈ from above is 3·nl + 2r − √(4r² + 3·nl) for min(L_x, L_y) ≥ 4, as registered.
 5. Rust 1.81, `clippy -D warnings`, integers only, output rows ending `json=0`.
 
-## Gates before any 7×7 or 8×8 run
+## Registered gates and post-run status
 
-| Gate | Requirement |
+| Gate | Outcome |
 |---|---|
-| G1 | 4×4 at r = 9, cut 10: the exact-row minimum equals the registered programs' value, and the certificate with the full integer table is 116.216456 as measured on November 15; the extreme-row certificate is recorded beside it |
-| G2 | 4×4 at r = 6, cut 14 and 5×5 at r = 9, cut 11: certificates at or below the registered 103.521056 and 168.020667 and within a stated distance of them |
-| G3 | Every lump count equals C(P; a, b)·N(a, b) on 4×4, 5×5, 6×6 |
-| G4 | 6×6 at r = 9, cut 11: agreement with the widened copies of the present tools |
-| G5 | Checks that go red: a claim raised by one unit, a dropped representative, a wrong M |
+| G1 | 4×4, r=9, cut=10 source/certificate regression PASS; the original fitted producer vector independently reproduced **116.272217** in full |
+| G2 | Local controls 4×4, r=6, cut=14 and 5×5, r=9, cut=11 PASS against registered floors; the original 5×5 vector independently reproduced **168.034092** in full |
+| G3 | Exact low-cut weighted configuration counts and 3×link electric-row counts PASS on registered smaller runs and on the independently verified 7×7 and 8×8 vector dumps |
+| G4 | 6×6, r=9, cut=11 producer bound reported; earlier widened-tool lower bounds are too loose for a useful comparison; **independent vector-dump replay pending** |
+| G5 | Real 4×4 source fault controls (overclaimed integer floor, deleted representative, altered magnetic count, missing electric move) PASS on [Rust 1.81 run 43722098152](https://github.com/JesseBrown1980/Rust-program-for-large-tori/actions/runs/43722098152); draft PR #2 awaits review |
 
-After the gates: predictions pushed first, then 7×7 at r = 12 and 16 and 8×8 at r = 16 on GitHub cells, a second machine as witness, and a request to GPT-6 for an independent checker,
-since one new program otherwise checks itself.
+The predictions were frozen before the initial 7×7/8×8 production cells. The independent source-check workflow now reads the producer's `rows.hbp` and `vector_*.hbp.gz` artifacts with pinned SHA and claim. The 7×7 and 8×8 per-level profiles show a repeated tight-lump sequence at the low magnetic levels; it remains an **empirical pattern** from these tested sizes and couplings. The 6×6 original dump, the 7×7 cut-11 variant and the cloud witness should be recorded from their own completed receipts.
 
 ## Scope
 
