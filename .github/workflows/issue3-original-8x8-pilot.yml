@@ -1,0 +1,80 @@
+name: Issue3 independent original 5x5 and 8x8 vector pilots
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/issue3-original-8x8-pilot.yml'
+      - 'src/bin/vectorcheck.rs'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-source-pilots:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        point:
+          - {case: "5x5-r9", artifact: "vector-1", file: "vector_5x5_r9_cut11.hbp", sha: "4ccd77902a2d6864d9b2831ec7b24277cb87bad7dc83f4ce3f8046bf6820a04d", bytes: 29376991, claim: 168034092, total: 32, classes: 473677}
+          - {case: "8x8-r16", artifact: "vector-5", file: "vector_8x8_r16_cut10.hbp", sha: "ab3060504156e2643a666d1c461e8ef5883ddbdca0782af165bd29ad41912414", bytes: 77498401, claim: 422822056, total: 64, classes: 766866}
+          - {case: "8x8-r24", artifact: "vector-6", file: "vector_8x8_r24_cut10.hbp", sha: "7f3b3969be13b69adf595e7905a5f2fb8cd610b7fc380dd2ebb0a42c4f84ebe1", bytes: 76915541, claim: 450803001, total: 64, classes: 766866}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 43724776455
+          github-token: ${{ github.token }}
+          name: ${{ matrix.point.artifact }}
+          path: build/producer
+      - name: Pin gzipped original vector and claim to producer's own receipt
+        env:
+          FILE: ${{ matrix.point.file }}
+          SHA: ${{ matrix.point.sha }}
+          BYTES: ${{ matrix.point.bytes }}
+          CLAIM: ${{ matrix.point.claim }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import gzip,hashlib,os,pathlib
+          p=pathlib.Path("build/producer")
+          name=os.environ["FILE"]
+          compressed=p/(name+".gz")
+          assert compressed.is_file(),"NO_ARCHIVED_COMPRESSED_VECTOR"
+          blob=gzip.decompress(compressed.read_bytes())
+          h=hashlib.sha256(blob).hexdigest()
+          assert h==os.environ["SHA"] and len(blob)==int(os.environ["BYTES"]),"ARCHIVE_FINGERPRINT_FAIL"
+          rows=(p/"rows.hbp").read_text()
+          v=[s for s in rows.splitlines() if s.startswith("BIG_VECTOR|")]
+          c=[s for s in rows.splitlines() if s.startswith("BIG_CERT|")]
+          assert v==["BIG_VECTOR|file="+name+"|bytes="+os.environ["BYTES"]+"|sha256="+h+"|json=0"],"PRODUCER_VECTOR_RECEIPT_FAIL"
+          assert len(c)==1 and "E9_lower_micro="+os.environ["CLAIM"]+"|" in c[0],"PRODUCER_CERT_FAIL"
+          assert "claim_micro="+os.environ["CLAIM"]+"|" in blob.split(b"\n",1)[0].decode("ascii"),"DUMP_CLAIM_CHANGED"
+          (p/name).write_bytes(blob)
+          print("SOURCE_LOCK|sha="+h+"|bytes="+str(len(blob))+"|claim="+os.environ["CLAIM"]+"|PASS|json=0")
+          PY
+      - name: Independent S3 canonicalization, actual electric row and full high-lump extrema
+        env:
+          FILE: ${{ matrix.point.file }}
+          SHA: ${{ matrix.point.sha }}
+          CLAIM: ${{ matrix.point.claim }}
+          TOTAL: ${{ matrix.point.total }}
+          CLASSES: ${{ matrix.point.classes }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --bin vectorcheck -- -D warnings
+          cargo +1.81.0 build --release --bin vectorcheck
+          mkdir -p build/checked
+          target/release/vectorcheck "build/producer/$FILE" --shard="0/$TOTAL" | tee build/checked/PILOT.hbp
+          grep -Fq "classes_total=$CLASSES|" build/checked/PILOT.hbp
+          grep -Fq "claim_micro=$CLAIM|" build/checked/PILOT.hbp
+          grep -Fq 'max_targets=ACTUAL_LOW_ORBIT_MAX|S3=INDEPENDENT|canonical=INDEPENDENT|result=PASS|scope=SHARD_ONLY|json=0' build/checked/PILOT.hbp
+          echo "SOURCE_SHA256=$SHA" >> build/checked/PILOT.hbp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-${{ matrix.point.case }}-independent-pilot
+          path: build/checked/PILOT.hbp
+          if-no-files-found: ignore
+          retention-days: 60
