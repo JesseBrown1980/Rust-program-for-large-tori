@@ -140,10 +140,13 @@ impl SquareTorus {
         t.endpoints = vec![(0, 0); t.edges];
         for x in 0..lx {
             for y in 0..ly {
-                t.endpoints[t.horizontal(x,y)] =
-                    (t.vertex(x,y),t.vertex(x+1,y));
-                t.endpoints[t.vertical(x,y)] =
-                    (t.vertex(x,y),t.vertex(x,y+1));
+                let h=t.horizontal(x,y);
+                let v=t.vertical(x,y);
+                let here=t.vertex(x,y);
+                let right=t.vertex(x+1,y);
+                let up=t.vertex(x,y+1);
+                t.endpoints[h]=(here,right);
+                t.endpoints[v]=(here,up);
             }
         }
         let mut directed = HashMap::new();
