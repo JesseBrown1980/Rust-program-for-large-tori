@@ -45,11 +45,11 @@ impl S3 {
         let mut label = [0u8; 6];
         let mut trans = Vec::new();
         for i in 0..6 {
-            for j in 0..6 {
+            for (j, right) in PERM.iter().enumerate() {
                 let p = [
-                    PERM[i][PERM[j][0] as usize],
-                    PERM[i][PERM[j][1] as usize],
-                    PERM[i][PERM[j][2] as usize],
+                    PERM[i][right[0] as usize],
+                    PERM[i][right[1] as usize],
+                    PERM[i][right[2] as usize],
                 ];
                 prod[i][j] = PERM.iter().position(|v| *v == p)
                     .ok_or("BROKEN_PERMUTATION_GROUP")? as u8;
@@ -216,7 +216,7 @@ impl SquareTorus {
             self.plaquette(g,u,face/self.ly,face%self.ly) as usize
         ]).collect()
     }
-    fn from_digits(&self,digits: &[u8]) -> Check<Vec<u8>> {
+    fn decode_free_digits(&self,digits: &[u8]) -> Check<Vec<u8>> {
         demand(digits.len()==self.free.len(),"WRONG_FREE_LINK_DIGIT_COUNT")?;
         let mut u=vec![0;self.edges];
         for (&edge,&digit) in self.free.iter().zip(digits) {
@@ -582,7 +582,7 @@ fn main_check(path:&str,shard:(usize,usize),fault:Option<&str>)->Check<()> {
     let (mut low_min,mut checked,mut moves)=(i128::MAX,0usize,0usize);
     for (idx,row) in input.classes.iter().enumerate() {
         if idx%shard.1!=shard.0 {continue;}
-        let mut u=torus.from_digits(&row.key)?;
+        let mut u=torus.decode_free_digits(&row.key)?;
         let cls=torus.classes(&group,&u);
         let a=cls.iter().filter(|&&k|k==1).count();
         let b=cls.iter().filter(|&&k|k==2).count();
