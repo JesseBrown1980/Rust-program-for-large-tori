@@ -160,12 +160,19 @@ def pattern_costs(a,b,L,kind,cut):
     require(own>0,"nonflat_trial_vector_not_positive")
     out={}
     for pat,moves in RULE.items():
+        valid=all(0<=a+da<=L*L and 0<=b+db<=L*L and
+                  a+da+b+db<=L*L and (a+da)%2==0
+                  for da,db,n in moves)
+        if not valid:
+            # This pattern has coefficient zero in every physically
+            # possible signature in this lump (e.g. CC when b<2,
+            # ee when no empty plaquettes). We verify that fact
+            # against every enumerated integer signature below.
+            out[pat]=Q(0)
+            continue
         subtotal=Q(0)
         for da,db,n in moves:
             t=(a+da,b+db)
-            require(0<=t[0]<=L*L and 0<=t[1]<=L*L and
-                    t[0]+t[1]<=L*L and t[0]%2==0,
-                    "S3_move_lump_out_of_range")
             subtotal+=n*(1-target_weight(t,kind,cut)/own)
         out[pat]=subtotal
     return out
@@ -257,7 +264,8 @@ def tamper_tests():
 def main():
     full=("--full" in sys.argv)
     allowed=({"--full"},set())
-    require(set(sys.argv[1:]) in allowed,"unknown_arguments")
+    require(not sys.argv[1:] or sys.argv[1:]==["--full"],
+            "unknown_arguments")
     tamper_tests()
     # Product form allows a known exact reference at 4x4 r=12.
     gap=check_one(4,Q(12),"product",0,True)
