@@ -34,7 +34,7 @@ def parse(path):
 def main():
     require(len(sys.argv) in (2,3,4),"USAGE_RECEIPTS_DIR_EXPECTED_SHARDS_SHA256")
     folder=pathlib.Path(sys.argv[1])
-    expected=int(sys.argv[2]) if len(sys.argv)==3 else 4
+    expected=int(sys.argv[2]) if len(sys.argv)>=3 else 4
     require(1<=expected<=256,"INVALID_SHARD_COUNT")
     locked_sha=sys.argv[3].lower() if len(sys.argv)==4 else None
     if locked_sha is not None:
