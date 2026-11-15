@@ -1,0 +1,118 @@
+name: Issue 3 independent vector-dump verifier, exact S3 and four-shard source replay
+on:
+  pull_request:
+    paths:
+      - 'src/bin/vectorcheck.rs'
+      - 'independent-gates/vectorcheck_fanin.py'
+      - 'independent-gates/ISSUE3-CHECKER.md'
+      - '.github/workflows/issue3-independent-vectorcheck.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  freeze-control-vector:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build native source and independent verifier under Rust 1.81
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --all-targets -- -D warnings
+          cargo +1.81.0 build --release --bins
+      - name: Generate a fresh genuine 4x4 cut10 HYBRID_BIG vector
+        run: |
+          set -euo pipefail
+          mkdir -p build/independent
+          target/release/large_tori 4 4 9 10 2 14 auto dump=build/independent/CONTROL-4x4.dump | tee build/independent/CONTROL-PRODUCER.hbp
+          test "$(grep -c '^P|' build/independent/CONTROL-4x4.dump)" -eq 10269
+          grep -Fq 'BIG_CERT|Lx=4|Ly=4|r=9|cut=10|vector_positive=1|' build/independent/CONTROL-PRODUCER.hbp
+          sha256sum build/independent/CONTROL-4x4.dump
+      - uses: actions/upload-artifact@v4
+        with:
+          name: independent-frozen-4x4-dump
+          path: |
+            build/independent/CONTROL-4x4.dump
+            build/independent/CONTROL-PRODUCER.hbp
+          if-no-files-found: error
+          retention-days: 60
+  independent-low-row:
+    needs: freeze-control-vector
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Rust 1.81 standalone vector checker build, no producer code linked
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal
+          cargo +1.81.0 build --release --bin vectorcheck
+      - uses: actions/download-artifact@v4
+        with:
+          name: independent-frozen-4x4-dump
+          path: build/independent
+      - name: Independently rederive class weights, own canon, 96 raw moves and high polytope
+        run: |
+          set -euo pipefail
+          mkdir -p build/checks
+          target/release/vectorcheck build/independent/CONTROL-4x4.dump --shard=${{ matrix.shard }}/4 | tee build/checks/CHECK-SHARD-${{ matrix.shard }}.hbp
+          grep -Fq '|shard=${{ matrix.shard }}/4|' build/checks/CHECK-SHARD-${{ matrix.shard }}.hbp
+          grep -Fq 'max_targets=ACTUAL_LOW_ORBIT_MAX|S3=INDEPENDENT|canonical=INDEPENDENT|result=PASS|scope=SHARD_ONLY|' build/checks/CHECK-SHARD-${{ matrix.shard }}.hbp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: independent-vectorcheck-shard-${{ matrix.shard }}
+          path: build/checks/CHECK-SHARD-${{ matrix.shard }}.hbp
+          if-no-files-found: error
+          retention-days: 60
+  fail-closed-fault-controls:
+    needs: freeze-control-vector
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Rust 1.81 independent verifier
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal
+          cargo +1.81.0 build --release --bin vectorcheck
+      - uses: actions/download-artifact@v4
+        with:
+          name: independent-frozen-4x4-dump
+          path: build/independent
+      - name: Reject deleted class, wrong magnetic label, and one missing raw move
+        run: |
+          set -euo pipefail
+          for fault in drop magnetic move; do
+            if target/release/vectorcheck build/independent/CONTROL-4x4.dump --shard=0/4 --fault="$fault" > /tmp/FAULT.log; then
+              echo "Fault accepted unexpectedly: $fault"; exit 1
+            fi
+            grep -Fq 'VECTORCHECK_REFUSE|reason=' /tmp/FAULT.log
+            cat /tmp/FAULT.log
+          done
+  independent-final-fanin:
+    needs: [independent-low-row, fail-closed-fault-controls]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: independent-vectorcheck-shard-*
+          merge-multiple: true
+          path: build/fanin
+      - name: Require all four independent source shards and reject one-unit claim inflation
+        run: |
+          set -euo pipefail
+          python3 -I -B independent-gates/vectorcheck_fanin.py build/fanin | tee build/ISSUE3-CHECKER-PASS.hbp
+          grep -Fq 'raised_claim_by_one_micro=REFUSED|all_sources=CHECKED|status=PASS|json=0' build/ISSUE3-CHECKER-PASS.hbp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue3-four-shard-independent-vector-certificate
+          path: build/ISSUE3-CHECKER-PASS.hbp
+          if-no-files-found: error
+          retention-days: 90
