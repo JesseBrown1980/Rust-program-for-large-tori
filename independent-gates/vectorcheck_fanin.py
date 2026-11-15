@@ -25,16 +25,26 @@ def parse(path):
         d[k]=v
     require(d["result"]=="PASS" and d["scope"]=="SHARD_ONLY",
             "NOT_A_REAL_SOURCE_SHARD")
+    shas=[line.split('=',1)[1] for line in lines if line.startswith('SOURCE_SHA256=')]
+    require(len(shas)<=1,'DUPLICATE_SOURCE_SHA_LINE')
+    if shas:
+        d['source_sha256']=shas[0].lower()
     return d
 
 def main():
-    require(len(sys.argv) in (2,3),"USAGE_RECEIPTS_DIR_EXPECTED_SHARDS")
+    require(len(sys.argv) in (2,3,4),"USAGE_RECEIPTS_DIR_EXPECTED_SHARDS_SHA256")
     folder=pathlib.Path(sys.argv[1])
     expected=int(sys.argv[2]) if len(sys.argv)==3 else 4
     require(1<=expected<=256,"INVALID_SHARD_COUNT")
+    locked_sha=sys.argv[3].lower() if len(sys.argv)==4 else None
+    if locked_sha is not None:
+        require(len(locked_sha)==64 and all(x in '0123456789abcdef' for x in locked_sha),'INVALID_SOURCE_SHA256')
     files=sorted(folder.glob("CHECK-SHARD-*.hbp"))
     require(len(files)==expected,"NEED_EVERY_SHARD_RECEIPT")
     rows=[parse(p) for p in files]
+    if locked_sha is not None:
+        require(all(row.get('source_sha256')==locked_sha for row in rows),
+                'SOURCE_HASH_MISMATCH_ACROSS_SHARDS')
     seen=set()
     total_classes=0
     total_moves=0
