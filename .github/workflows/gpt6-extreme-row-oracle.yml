@@ -1,0 +1,37 @@
+name: GPT-6 independent extreme-row hybrid proof gate
+on:
+  pull_request:
+    paths:
+      - 'independent-gates/**'
+      - '.github/workflows/gpt6-extreme-row-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-extreme-row-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Exact S3 electric source and hybrid above-cut vertex safety
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python3 -I -B independent-gates/gpt6_extreme_row_oracle.py | tee build/EXTREME-ROW.hbp
+          test "$(grep -c '^EXTREME_ROW_ORACLE|' build/EXTREME-ROW.hbp)" -eq 4
+          grep -Fq 'low_orbit_min_instead_of_max=REFUSED|false_x0_constraint=REFUSED|' build/EXTREME-ROW.hbp
+          grep -Fq 'L=4|mode=product|' build/EXTREME-ROW.hbp
+          grep -Fq 'ratio_minus_flat=657/32|winning_lump=0,1|' build/EXTREME-ROW.hbp
+          grep -Fq 'EXTREME_ROW_DONE|independent_S3_moves=PASS|exact_vertex_lower_bound=PASS|hybrid_low_lump_max=PASS|' build/EXTREME-ROW.hbp
+          grep -Fq 'full_G1_G5_hybrid_certificate=NOT_COMPUTED|large_torus_gap=NOT_COMPUTED|' build/EXTREME-ROW.hbp
+      - name: Python syntax and forbidden shared-source dependencies
+        run: |
+          set -euo pipefail
+          python3 -m py_compile independent-gates/gpt6_extreme_row_oracle.py
+          ! grep -Eq '^(import|from) (local_table|product_bound|ritz|hybridcheck)' independent-gates/gpt6_extreme_row_oracle.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpt6-independent-extreme-row-receipt
+          path: build/EXTREME-ROW.hbp
+          if-no-files-found: error
+          retention-days: 90
