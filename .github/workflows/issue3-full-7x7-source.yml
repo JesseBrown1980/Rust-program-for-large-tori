@@ -1,0 +1,117 @@
+name: Issue 3 full ORIGINAL 7x7 source verification r12 r16
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/issue3-full-7x7-source.yml'
+      - 'src/bin/vectorcheck.rs'
+      - 'independent-gates/vectorcheck_fanin.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-real-low-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        point:
+          - {case: "7x7-r12", artifact: "vector-3", file: "vector_7x7_r12_cut10.hbp", sha: "992019e5c231a36ba0f92689fe934905db02ca6d0ddb5dab2c1ac7fa4608f29d", claim: 317469462, bytes: 29094516}
+          - {case: "7x7-r16", artifact: "vector-4", file: "vector_7x7_r16_cut10.hbp", sha: "e015d6c58515b166217c04e44cc8ad3050be78148a814b645936bcdb9ef0687d", claim: 334903559, bytes: 29005127}
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 43724776455
+          github-token: ${{ github.token }}
+          name: ${{ matrix.point.artifact }}
+          path: build/source
+      - name: Verify frozen SHA and exact original producer receipt
+        env:
+          FILE: ${{ matrix.point.file }}
+          SHA: ${{ matrix.point.sha }}
+          BYTES: ${{ matrix.point.bytes }}
+          CLAIM: ${{ matrix.point.claim }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import gzip,hashlib,os,pathlib
+          d=pathlib.Path("build/source")
+          name=os.environ["FILE"]
+          source=d/(name+".gz")
+          assert source.is_file(),"SOURCE_MISSING"
+          raw=gzip.decompress(source.read_bytes())
+          sha=hashlib.sha256(raw).hexdigest()
+          assert sha==os.environ["SHA"],"SOURCE_SHA_MISMATCH"
+          assert len(raw)==int(os.environ["BYTES"]),"SOURCE_BYTE_COUNT"
+          rows=(d/"rows.hbp").read_text()
+          vector=[x for x in rows.splitlines() if x.startswith("BIG_VECTOR|")]
+          cert=[x for x in rows.splitlines() if x.startswith("BIG_CERT|")]
+          assert vector==["BIG_VECTOR|file="+name+"|bytes="+os.environ["BYTES"]+"|sha256="+sha+"|json=0"],"PRODUCER_SHA_RECEIPT"
+          assert len(cert)==1 and "E9_lower_micro="+os.environ["CLAIM"]+"|" in cert[0],"PRODUCER_CLAIM"
+          header=raw.split(b"\n",1)[0].decode("ascii")
+          assert "claim_micro="+os.environ["CLAIM"]+"|" in header,"DUMP_CLAIM_CHANGED"
+          (d/name).write_bytes(raw)
+          print("SOURCE_LOCK|sha256="+sha+"|bytes="+str(len(raw))+"|claim="+os.environ["CLAIM"]+"|status=PASS|json=0")
+          PY
+      - name: Run standalone Rust 1.81 exact S3 row verifier, sharded
+        env:
+          FILE: ${{ matrix.point.file }}
+          SHA: ${{ matrix.point.sha }}
+          SHARD: ${{ matrix.shard }}
+          CLAIM: ${{ matrix.point.claim }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal
+          cargo +1.81.0 build --release --bin vectorcheck
+          mkdir -p build/checked
+          target/release/vectorcheck "build/source/$FILE" --shard="$SHARD/16" | tee "build/checked/CHECK-SHARD-$SHARD.hbp"
+          grep -Fq "claim_micro=$CLAIM|" "build/checked/CHECK-SHARD-$SHARD.hbp"
+          grep -Fq '|classes_total=337082|' "build/checked/CHECK-SHARD-$SHARD.hbp"
+          grep -Fq '|max_targets=ACTUAL_LOW_ORBIT_MAX|S3=INDEPENDENT|canonical=INDEPENDENT|result=PASS|scope=SHARD_ONLY|json=0' "build/checked/CHECK-SHARD-$SHARD.hbp"
+          echo "SOURCE_SHA256=$SHA" >> "build/checked/CHECK-SHARD-$SHARD.hbp"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-seven-${{ matrix.point.case }}-shard-${{ matrix.shard }}
+          path: build/checked/CHECK-SHARD-${{ matrix.shard }}.hbp
+          if-no-files-found: ignore
+          retention-days: 60
+  independent-complete-fanin:
+    needs: independent-real-low-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        point:
+          - {case: "7x7-r12", sha: "992019e5c231a36ba0f92689fe934905db02ca6d0ddb5dab2c1ac7fa4608f29d", claim: 317469462}
+          - {case: "7x7-r16", sha: "e015d6c58515b166217c04e44cc8ad3050be78148a814b645936bcdb9ef0687d", claim: 334903559}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: full-seven-${{ matrix.point.case }}-shard-*
+          merge-multiple: true
+          path: build/receipts
+      - name: Require every single 7x7 row, exact 99,102,108 raw moves and correct claim
+        env:
+          SHA: ${{ matrix.point.sha }}
+          CLAIM: ${{ matrix.point.claim }}
+        run: |
+          set -euo pipefail
+          python3 -I -B independent-gates/vectorcheck_fanin.py build/receipts 16 "$SHA" | tee build/RESULT-SEVEN-FULL.hbp
+          grep -Fq 'fully_checked_exact_classes=337082|fully_checked_raw_moves=99102108|' build/RESULT-SEVEN-FULL.hbp
+          grep -Fq "claim_micro=$CLAIM|independent_min_micro=$CLAIM|" build/RESULT-SEVEN-FULL.hbp
+          grep -Fq 'raised_claim_by_one_micro=REFUSED|all_sources=CHECKED|status=PASS|json=0' build/RESULT-SEVEN-FULL.hbp
+          echo "SOURCE_SHA256=$SHA" >> build/RESULT-SEVEN-FULL.hbp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-${{ matrix.point.case }}-complete-independent-cert
+          path: build/RESULT-SEVEN-FULL.hbp
+          if-no-files-found: ignore
+          retention-days: 90
