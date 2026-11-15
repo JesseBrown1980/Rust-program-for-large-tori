@@ -11,7 +11,7 @@
 //! link-pattern counts (four links per plaquette, the adjacency caps): the ratio is linear in those counts, so its
 //! minimum over the polytope is at a vertex and bounds the minimum over the integer rows from below.
 //!
-//! usage: large_tori LX LY R CUT THREADS SWEEPS TARGETS_MICRO[,..]|auto [REPLAY_R[,..]]
+//! usage: large_tori LX LY R CUT THREADS SWEEPS TARGETS_MICRO[,..]|auto [REPLAY_R[,..]] [dump=FILE]
 //! Integers only. Keys are digit arrays, so no packing limit. Output rows end in json=0.
 
 use std::collections::HashMap;
@@ -629,7 +629,10 @@ struct Fit {
     min_lump: i128,
 }
 
-fn certificate(md: &Model, t: &Torus, r: i128, psi: &[i128], g: &[i128]) -> (i128, i128, Vec<i128>) {
+/// One entry per magnetic level M: the least of (ratio - r M) over the rows at that level, its lump and its kind (0 exact row, 1 vertex row).
+type Profile = Vec<(i128, usize, usize, u8)>;
+
+fn certificate(md: &Model, t: &Torus, r: i128, psi: &[i128], g: &[i128]) -> (i128, i128, Profile) {
     let nl3 = 3 * t.nl as i128;
     let mut dmax = vec![0i128; md.side * md.side];
     for (st, p) in md.states.iter().zip(psi) {
@@ -637,13 +640,15 @@ fn certificate(md: &Model, t: &Torus, r: i128, psi: &[i128], g: &[i128]) -> (i12
         *slot = (*slot).max(*p);
     }
     // per M: the least of (ratio - r M), so that the same vector can be read at another coupling
-    let mut electric = vec![i128::MAX; 3 * t.p + 1];
+    let mut electric: Profile = vec![(i128::MAX, 0, 0, 0); 3 * t.p + 1];
     let mut min_exact = i128::MAX;
     for (st, p) in md.states.iter().zip(psi) {
         let m = cost(st.a as usize, st.b as usize) as i128;
         let s: i128 = st.exact.iter().map(|&j| psi[j as usize]).sum::<i128>() + st.above.iter().map(|&(li, c)| i128::from(c) * g[li as usize]).sum::<i128>();
         let el = nl3 * U - (s * U + p - 1) / p; // 3 nl - s / p, rounded down
-        electric[m as usize] = electric[m as usize].min(el);
+        if el < electric[m as usize].0 {
+            electric[m as usize] = (el, st.a as usize, st.b as usize, 0);
+        }
         min_exact = min_exact.min(el + r * m * U);
     }
     let mut min_lump = i128::MAX;
@@ -652,7 +657,9 @@ fn certificate(md: &Model, t: &Torus, r: i128, psi: &[i128], g: &[i128]) -> (i12
         let (num, det) = lump_worst(md, t, li, g, &dmax);
         let den = det * g[li];
         let el = nl3 * U - (num * U + den - 1) / den;
-        electric[m as usize] = electric[m as usize].min(el);
+        if el < electric[m as usize].0 {
+            electric[m as usize] = (el, *a, *b, 1);
+        }
         min_lump = min_lump.min(el + r * m * U);
     }
     (min_exact, min_lump, electric)
@@ -857,15 +864,42 @@ fn run(args: &[String]) -> Result<(), String> {
     if !positive || upper < cert {
         return Err("the vector is not positive, or the upper end is below the certificate".into());
     }
+    // per level: the least row, written as its electric part (ratio - r M) and its lump
+    for (m, e) in electric.iter().enumerate().filter(|(_, e)| e.0 != i128::MAX) {
+        println!(
+            "BIG_PROFILE|Lx={lx}|Ly={ly}|r={r}|cut={cut}|M={m}|electric_min_micro={}|ratio_micro={}|slack_above_certificate_micro={}|at_a={}|at_b={}|row={}|json=0",
+            e.0,
+            e.0 + r * m as i128 * U,
+            e.0 + r * m as i128 * U - cert,
+            e.1,
+            e.2,
+            if e.3 == 0 { "exact" } else { "vertex" }
+        );
+    }
+    // the vector itself, for a checker that shares no code with this program
+    if let Some(path) = args.iter().find_map(|x| x.strip_prefix("dump=")) {
+        let mut text = format!("HYBRID_BIG|Lx={lx}|Ly={ly}|r={r}|cut={cut}|classes={}|lumps_above={}|claim_micro={cert}|key=free_link_digits_of_the_comb_gauge|json=0
+", md.states.len(), md.lumps.len());
+        for (st, p) in md.states.iter().zip(&f.psi) {
+            let digits: String = st.key.iter().map(|d| char::from(b'0' + *d)).collect();
+            text.push_str(&format!("P|{digits}|{}|{}|{}|{p}
+", st.a, st.b, st.weight));
+        }
+        for ((a, b, _), v) in md.lumps.iter().zip(&f.g) {
+            text.push_str(&format!("G|{a}|{b}|{v}
+"));
+        }
+        std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))?;
+        println!("BIG_DUMP|file={path}|rows={}|json=0", md.states.len() + md.lumps.len());
+    }
     // the same vector at other couplings: every row is linear in r
     if let Some(list) = args.get(8) {
         for r2 in list.split(',').filter_map(|x| x.parse::<i128>().ok()) {
-            let c2 = electric.iter().enumerate().filter(|(_, e)| **e != i128::MAX).map(|(m, e)| e + r2 * m as i128 * U).min().unwrap_or(0);
+            let c2 = electric.iter().enumerate().filter(|(_, e)| e.0 != i128::MAX).map(|(m, e)| e.0 + r2 * m as i128 * U).min().unwrap_or(0);
             let e8b = if lx.min(ly) >= 4 { (3 * nl + 2 * r2) * U - isqrt((4 * r2 * r2 + 3 * nl) * U * U) } else { e8_flat };
             println!("BIG_REPLAY|vector_fitted_at_r={r}|read_at_r={r2}|E9_lower_micro={c2}|E8_upper_micro={e8b}|gap_lower_micro={}|json=0", c2 - e8b);
         }
     }
-    let _ = &md.states[0].key;
     Ok(())
 }
 
