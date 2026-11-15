@@ -268,7 +268,7 @@ impl SquareTorus {
             let fixed=self.fix_gauge(g,&image);
             for c in 0..6u8 {
                 let key:Vec<u8> = fixed.iter().map(|&x|g.conj(c,x)).collect();
-                if least.as_ref().is_none_or(|v|key < *v) {
+                if least.as_ref().map_or(true,|v|key < *v) {
                     least=Some(key.clone());
                 }
                 unique.insert(key);
