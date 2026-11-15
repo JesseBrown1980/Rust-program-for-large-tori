@@ -28,10 +28,12 @@ def parse(path):
     return d
 
 def main():
-    require(len(sys.argv)==2,"USAGE_RECEIPTS_DIR")
+    require(len(sys.argv) in (2,3),"USAGE_RECEIPTS_DIR_EXPECTED_SHARDS")
     folder=pathlib.Path(sys.argv[1])
+    expected=int(sys.argv[2]) if len(sys.argv)==3 else 4
+    require(1<=expected<=256,"INVALID_SHARD_COUNT")
     files=sorted(folder.glob("CHECK-SHARD-*.hbp"))
-    require(len(files)==4,"NEED_EXACTLY_FOUR_SHARD_RECEIPTS")
+    require(len(files)==expected,"NEED_EVERY_SHARD_RECEIPT")
     rows=[parse(p) for p in files]
     seen=set()
     total_classes=0
@@ -39,9 +41,9 @@ def main():
     claimed=None
     minimum=None
     for row in rows:
-        require(row["shard"].endswith("/4"),"WRONG_SHARD_TOTAL")
+        require(row["shard"].endswith("/"+str(expected)),"WRONG_SHARD_TOTAL")
         index=int(row["shard"].split("/")[0])
-        require(index in range(4) and index not in seen,
+        require(index in range(expected) and index not in seen,
                 "DUPLICATE_OR_INVALID_SOURCE_SHARD")
         seen.add(index)
         identity=(row["Lx"],row["Ly"],row["r"],row["cut"],
@@ -61,7 +63,7 @@ def main():
         high=int(row["high_min_micro"])
         this_min=min(low,high)
         minimum=this_min if minimum is None else min(minimum,this_min)
-    require(seen==set(range(4)),"MISSING_SHARD")
+    require(seen==set(range(expected)),"MISSING_SHARD")
     require(total_classes==int(rows[0]["classes_total"]),
             "INCOMPLETE_VERIFIED_EXACT_REGION")
     require(minimum==int(rows[0]["claim_micro"]),
@@ -71,14 +73,14 @@ def main():
     require(not minimum>=int(rows[0]["claim_micro"])+1,
             "RAISED_CLAIM_MUST_BE_REFUSED")
     print("VECTORCHECK_FANIN|Lx={}|Ly={}|r={}|cut={}"
-          "|checked_shards=4|fully_checked_exact_classes={}"
+          "|checked_shards={}|fully_checked_exact_classes={}"
           "|fully_checked_raw_moves={}"
           "|high_vertices_checked_per_shard={}"
           "|claim_micro={}|independent_min_micro={}"
           "|raised_claim_by_one_micro=REFUSED"
           "|all_sources=CHECKED|status=PASS|json=0".format(
               rows[0]["Lx"],rows[0]["Ly"],rows[0]["r"],
-              rows[0]["cut"],total_classes,total_moves,
+              rows[0]["cut"],expected,total_classes,total_moves,
               rows[0]["vertices_above"],rows[0]["claim_micro"],
               minimum),flush=True)
 
