@@ -94,6 +94,28 @@ All four must pass against the **same frozen input**; the
 class/move counts, compares high-source outputs and asserts
 that the full lower bound equals the claim.
 
+**Large-artifact manual replay workflow.** Once an actual 6×6,
+7×7 or 8×8 hosted cell publishes its fitted \`HYBRID_BIG\`
+vector using \`dump=FILE\` and uploads exactly one \`*.dump\`
+artifact, launch
+\`issue3-manual-large-vector-replay.yml\` from the GitHub
+Actions UI after the reviewer branch is available on the default
+branch. Provide the original source \`vector_run_id\`,
+\`vector_artifact_name\`, exact uncompressed \`expected_sha256\`,
+the chosen \`expected_shards\` (1..256), and the literal complete
+JSON \`shard_indices=[0,1,...,N-1]\`. The workflow checks the
+source SHA before starting, re-verifies it in each independent
+Rust shard, requires all receipt fingerprints to match, and
+accepts the certificate only after a complete exact census in
+\`vectorcheck_fanin.py\`. Source sharding can make large
+verification feasible, but cannot relax the mandatory checks.
+
+This workflow is **prepared, not yet executed** for a large
+torus. Older six-cell runs that predate the dump feature do
+not contain an acceptable input artifact; their numerical
+results must retain \`PRODUCER_ONLY\` status until rerun with
+\`dump=FILE\` and a separate verifier PASS.
+
 **Acceptance progression:** first generate and verify an actual
 4×4, r=9, cut10 dump on GitHub. After it passes, feed the
 completed 6×6 dump, then 7×7 and 8×8. Larger jobs may need
