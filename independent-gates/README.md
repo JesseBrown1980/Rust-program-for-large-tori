@@ -29,7 +29,7 @@ The generated independent S₃ table handles the special T–T transition to the
 
 ## Acceptance and negative controls
 
-`gpt6_extreme_row_oracle.py` generates (S_3) from all six permutations and the 3 transpositions (not from the model table), constructs a different cross-product vertex solver, enumerates all integer signatures on 4×4, and verifies the vertex minimum is no larger, at every nonflat lump, for both a product vector and a synthetic **hybrid** vector with nonuniform low-orbit values. It checks the square 5×5 hybrid vertices (and the full integer enumeration with `--full`) and 6×6 vertices.
+`gpt6_extreme_row_oracle.py` generates (S_3) from all six permutations and the 3 transpositions (not from the model table), constructs a different cross-product vertex solver, enumerates all feasible integer (x,y,z) triples on 4×4, and verifies the vertex minimum is no larger, at every nonflat lump, for both a product vector and a synthetic **hybrid** vector with nonuniform low-orbit values. It checks the square 5×5 hybrid vertices (and the full integer enumeration with `--full`) and 6×6 vertices.
 
 Two controls **must turn red** if an implementation incorrectly restricts allowed vertices or understates target weights:
 
