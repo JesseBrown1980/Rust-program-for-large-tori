@@ -1,0 +1,100 @@
+name: Issue3 independently verify COMPLETE original 6x6 r9 cut11 vector
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/issue3-full-6x6-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-independent-source-shards:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 43724776455
+          github-token: ${{ github.token }}
+          name: vector-2
+          path: build/original
+      - name: Reject any mismatched original 6x6 file, byte length, SHA or producer claim
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import gzip,hashlib,pathlib
+          p=pathlib.Path("build/original")
+          name="vector_6x6_r9_cut11.hbp"
+          z=p/(name+".gz")
+          assert z.is_file(),"ORIGINAL_COMPRESSED_DUMP_MISSING"
+          raw=gzip.decompress(z.read_bytes())
+          digest=hashlib.sha256(raw).hexdigest()
+          assert len(raw)==165848833,"ORIGINAL_VECTOR_BYTE_LENGTH_MISMATCH"
+          assert digest=="dca2181bf4eee2d78e1d3c43ea6d1e7af28a2d083437f0d54a4f5af993bdc633","ORIGINAL_SHA_MISMATCH"
+          rows=(p/"rows.hbp").read_text()
+          wanted="BIG_VECTOR|file="+name+"|bytes=165848833|sha256="+digest+"|json=0"
+          assert [x for x in rows.splitlines() if x.startswith("BIG_VECTOR|")]==[wanted],"ORIGINAL_BIG_VECTOR_RECEIPT_MISMATCH"
+          cert=[x for x in rows.splitlines() if x.startswith("BIG_CERT|")]
+          assert len(cert)==1,"MISSING_PRODUCER_CERT"
+          assert "E9_lower_micro=227666667|" in cert[0],"PRODUCER_E9_CLAIM_CHANGED"
+          assert "E8_upper_micro=210762100|" in cert[0],"PRODUCER_E8_BOUND_CHANGED"
+          assert "gap_lower_micro=16904567|" in cert[0],"PRODUCER_GAP_CHANGED"
+          hdr=raw.split(b"\n",1)[0].decode("ascii")
+          assert "claim_micro=227666667|" in hdr,"DUMP_CLAIM_CHANGED"
+          (p/name).write_bytes(raw)
+          print("ORIGINAL6X6_LOCK|sha256="+digest+"|bytes="+str(len(raw))+"|E9_lower_micro=227666667|E8_upper_micro=210762100|gap_lower_micro=16904567|PASS|json=0")
+          PY
+      - name: Independent Rust 1.81 verifier with 1/64 real source classes
+        env:
+          I: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --bin vectorcheck -- -D warnings
+          cargo +1.81.0 build --release --bin vectorcheck
+          mkdir -p build/checks
+          target/release/vectorcheck build/original/vector_6x6_r9_cut11.hbp --shard="$I/64" | tee "build/checks/CHECK-SHARD-$I.hbp"
+          grep -Fq 'classes_total=2257839|' "build/checks/CHECK-SHARD-$I.hbp"
+          grep -Fq 'lumps_above=352|vertices_above=3153|' "build/checks/CHECK-SHARD-$I.hbp"
+          grep -Fq 'claim_micro=227666667|' "build/checks/CHECK-SHARD-$I.hbp"
+          grep -Fq 'max_targets=ACTUAL_LOW_ORBIT_MAX|S3=INDEPENDENT|canonical=INDEPENDENT|result=PASS|scope=SHARD_ONLY|json=0' "build/checks/CHECK-SHARD-$I.hbp"
+          echo 'SOURCE_SHA256=dca2181bf4eee2d78e1d3c43ea6d1e7af28a2d083437f0d54a4f5af993bdc633' >> "build/checks/CHECK-SHARD-$I.hbp"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-original-six-shard-${{ matrix.shard }}
+          path: build/checks/CHECK-SHARD-${{ matrix.shard }}.hbp
+          if-no-files-found: ignore
+          retention-days: 60
+  complete-independent-fanin:
+    needs: original-independent-source-shards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: independent-original-six-shard-*
+          path: build/receipts
+          merge-multiple: true
+      - name: Require all 2,257,839 classes and 487,693,224 electric moves
+        run: |
+          set -euo pipefail
+          python3 -I -B independent-gates/vectorcheck_fanin.py build/receipts 64 dca2181bf4eee2d78e1d3c43ea6d1e7af28a2d083437f0d54a4f5af993bdc633 | tee build/RESULT-6X6-FULL.hbp
+          grep -Fq 'fully_checked_exact_classes=2257839|fully_checked_raw_moves=487693224|' build/RESULT-6X6-FULL.hbp
+          grep -Fq 'claim_micro=227666667|independent_min_micro=227666667|' build/RESULT-6X6-FULL.hbp
+          grep -Fq 'raised_claim_by_one_micro=REFUSED|all_sources=CHECKED|status=PASS|json=0' build/RESULT-6X6-FULL.hbp
+          echo 'SOURCE_SHA256=dca2181bf4eee2d78e1d3c43ea6d1e7af28a2d083437f0d54a4f5af993bdc633' >> build/RESULT-6X6-FULL.hbp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-6x6-r9-independent-complete-source
+          path: build/RESULT-6X6-FULL.hbp
+          if-no-files-found: ignore
+          retention-days: 90
