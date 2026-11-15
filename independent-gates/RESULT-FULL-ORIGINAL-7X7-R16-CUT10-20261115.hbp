@@ -1,0 +1,2 @@
+VECTORCHECK_FANIN|Lx=7|Ly=7|r=16|cut=10|checked_shards=16|fully_checked_exact_classes=337082|fully_checked_raw_moves=99102108|high_vertices_checked_per_shard=6249|claim_micro=334903559|independent_min_micro=334903559|raised_claim_by_one_micro=REFUSED|all_sources=CHECKED|status=PASS|json=0
+SOURCE_SHA256=e015d6c58515b166217c04e44cc8ad3050be78148a814b645936bcdb9ef0687d
