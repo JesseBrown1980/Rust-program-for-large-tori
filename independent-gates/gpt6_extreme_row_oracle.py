@@ -210,6 +210,35 @@ def check_one(L,r,kind,cut,exhaustive):
                 true_min=None
                 for x,y,z in integer_xyz(a,b,L):
                     value=score(coeff,x,y,z)
+                    nl=2*L*L
+                    same=x if weights["TTs"]<=weights["TTd"] else 0
+                    counts={
+                        "ee":nl-4*(a+b)+x+y+z,
+                        "eT":4*a-2*x-y,
+                        "eC":4*b-y-2*z,
+                        "TTs":same,
+                        "TTd":x-same,
+                        "TC":y,
+                        "CC":z,
+                    }
+                    require(all(n>=0 for n in counts.values()) and
+                            sum(counts.values())==nl,
+                            "invalid_raw_pattern_multiplicities")
+                    direct=r*(2*a+3*b)+sum(
+                        counts[p]*weights[p] for p in counts)
+                    require(value==direct,
+                            "affine_pattern_operator_not_exact")
+                    # A pattern whose triple S3 move can leave the
+                    # legal plaquette-count range must have count 0.
+                    for pat,n in counts.items():
+                        if not n:
+                            continue
+                        require(all(0<=a+da<=L*L and
+                                    0<=b+db<=L*L and
+                                    a+da+b+db<=L*L and
+                                    (a+da)%2==0
+                                    for da,db,_ in RULE[pat]),
+                                "active_pattern_has_invalid_S3_move")
                     if true_min is None or value<true_min:
                         true_min=value
                     integer_points+=1
