@@ -944,11 +944,20 @@ mod g5_fault_controls {
 
         // Negative control 1: a reported lower floor inflated by exactly
         // one micro-unit. It MUST refuse, without rounding slack.
-        let source = 117_000_123i128;
-        let above = 116_500_456i128;
-        assert!(check_reported_lower(above, source, above).is_ok());
+        let actual_vector = vec![1i128 << 40; model.states.len()];
+        let actual_above_weights = vec![1i128 << 35; model.lumps.len()];
+        let (source, above, _) = certificate(
+            &model,
+            &torus,
+            9,
+            &actual_vector,
+            &actual_above_weights,
+        );
+        let measured_floor = source.min(above);
+        assert!(measured_floor != i128::MIN && measured_floor != i128::MAX);
+        assert!(check_reported_lower(measured_floor, source, above).is_ok());
         assert_eq!(
-            check_reported_lower(above + 1, source, above),
+            check_reported_lower(measured_floor + 1, source, above),
             Err("UNJUSTIFIED_PLUS_ONE_LOWER_CLAIM")
         );
 
