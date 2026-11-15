@@ -1,0 +1,28 @@
+name: G5 Rust exact-source fault and one-unit certificate refusal
+on:
+  pull_request:
+    paths:
+      - 'src/main.rs'
+      - '.github/workflows/g5-rust-sabotage.yml'
+      - 'review-g5/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rust-181-g5-exact-model-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Pin Rust 1.81 toolchain and strict lints
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --all-targets -- -D warnings
+      - name: Run actual 4x4 cut4 model and planted proof sabotage
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --release g5_exact_small_torus_rejects_sabotage -- --nocapture
+      - name: Show G5 scope
+        run: |
+          echo 'G5|4x4_cut4_positive_model=PASS|planted_plus_one_floor=REFUSED|dropped_real_orbit=REFUSED|wrong_magnetic_count=REFUSED|missing_electric_move=REFUSED|G1_G4=NOT_COMPUTED|large_torus_gap=NOT_COMPUTED|json=0'

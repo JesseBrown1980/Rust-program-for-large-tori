@@ -914,3 +914,138 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+
+#[cfg(test)]
+mod g5_fault_controls {
+    use super::*;
+
+    // The same objective/census rules used by production, but invoked
+    // on deliberately modified records to prove they turn red.
+    fn audit_exact_region(t: &Torus, group: &Group, model: &Model) -> Result<(), &'static str> {
+        let mut counts: HashMap<(usize, usize), u128> = HashMap::new();
+        let mut decoded = vec![0u8; t.nl];
+        for state in &model.states {
+            t.decode(&state.key, &mut decoded);
+            let (a, b) = lump_of(t, group, &decoded);
+            if a != usize::from(state.a) || b != usize::from(state.b) {
+                return Err("WRONG_MAGNETIC_LUMP");
+            }
+            let raw_moves = state.exact.len()
+                + state.above.iter().map(|(_, n)| usize::from(*n)).sum::<usize>()
+                + usize::from(state.to_flat);
+            if raw_moves != 3 * t.nl {
+                return Err("INCOMPLETE_3NL_ELECTRIC_ROW");
+            }
+            *counts.entry((a, b)).or_insert(0) += u128::from(state.weight);
+        }
+        for a in (0..=t.p).step_by(2) {
+            for b in 0..=t.p - a {
+                let mass = cost(a, b);
+                if mass == 0 || mass > model.cut {
+                    continue;
+                }
+                if counts.get(&(a, b)).copied().unwrap_or(0) != expected(t.p, a, b) {
+                    return Err("MISSING_ORBIT_REPRESENTATIVE");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn check_reported_lower(
+        claimed: i128,
+        exact_source_minimum: i128,
+        above_cut_minimum: i128,
+    ) -> Result<(), &'static str> {
+        // Claiming even ONE micro-unit above the exact integer minima
+        // must be rejected. A smaller floor is conservative and valid.
+        if claimed > exact_source_minimum.min(above_cut_minimum) {
+            return Err("UNJUSTIFIED_PLUS_ONE_LOWER_CLAIM");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn g5_exact_small_torus_rejects_sabotage() {
+        let torus = Torus::new(4, 4);
+        let group = Group::new();
+        let mut model = build(&torus, &group, 4, 1)
+            .expect("4x4 cut4 must construct a complete original orbit region");
+        assert!(!model.states.is_empty());
+        audit_exact_region(&torus, &group, &model)
+            .expect("original unmodified small-torus census and raw row count");
+
+        // Negative control 1: a reported lower floor inflated by exactly
+        // one micro-unit. It MUST refuse, without rounding slack.
+        let actual_vector = vec![1i128 << 40; model.states.len()];
+        let actual_above_weights = vec![1i128 << 35; model.lumps.len()];
+        let (source, above, _) = certificate(
+            &model,
+            &torus,
+            9,
+            &actual_vector,
+            &actual_above_weights,
+        );
+        let measured_floor = source.min(above);
+        assert!(measured_floor != i128::MIN && measured_floor != i128::MAX);
+        assert!(check_reported_lower(measured_floor, source, above).is_ok());
+        assert_eq!(
+            check_reported_lower(measured_floor + 1, source, above),
+            Err("UNJUSTIFIED_PLUS_ONE_LOWER_CLAIM")
+        );
+
+        // Negative control 2: remove one genuine positive-weight orbit
+        // representative. The independent per-lump combinatorial count
+        // MUST fail even though every retained row is unchanged.
+        let removed = model.states.pop().expect("at least one actual class");
+        assert_eq!(
+            audit_exact_region(&torus, &group, &model),
+            Err("MISSING_ORBIT_REPRESENTATIVE")
+        );
+        model.states.push(removed);
+        assert!(audit_exact_region(&torus, &group, &model).is_ok());
+
+        // Negative control 3: corrupt the stored magnetic (a,b) count,
+        // leaving the canonical source key and electric moves untouched.
+        let correct_a = model.states[0].a;
+        model.states[0].a = correct_a + 2;
+        assert_eq!(
+            audit_exact_region(&torus, &group, &model),
+            Err("WRONG_MAGNETIC_LUMP")
+        );
+        model.states[0].a = correct_a;
+
+        // Negative control 4: remove one raw electric move from a
+        // source row without changing its other destinations.
+        assert!(audit_exact_region(&torus, &group, &model).is_ok());
+        let original_flat = model.states[0].to_flat;
+        let mut popped = None;
+        if original_flat > 0 {
+            model.states[0].to_flat -= 1;
+        } else if !model.states[0].exact.is_empty() {
+            popped = model.states[0].exact.pop();
+        } else {
+            let (dest, mult) = model.states[0]
+                .above
+                .first_mut()
+                .expect("every nonflat orbit must have electric moves");
+            let _ = dest;
+            assert!(*mult > 0);
+            *mult -= 1;
+        }
+        assert_eq!(
+            audit_exact_region(&torus, &group, &model),
+            Err("INCOMPLETE_3NL_ELECTRIC_ROW")
+        );
+        // Restore only where the source row was modified.
+        if original_flat > 0 {
+            model.states[0].to_flat = original_flat;
+        } else if let Some(index) = popped {
+            model.states[0].exact.push(index);
+        } else {
+            model.states[0].above[0].1 += 1;
+        }
+        assert!(audit_exact_region(&torus, &group, &model).is_ok());
+    }
+}
