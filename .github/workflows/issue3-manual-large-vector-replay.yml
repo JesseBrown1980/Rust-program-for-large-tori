@@ -1,0 +1,133 @@
+name: Independent whole-torus vector dump replay (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      vector_run_id:
+        description: "Run ID with the frozen HYBRID_BIG vector-dump artifact"
+        required: true
+        type: string
+      vector_artifact_name:
+        description: "Artifact name; must contain exactly one *.dump file"
+        required: true
+        type: string
+      expected_sha256:
+        description: "SHA-256 of the uncompressed HYBRID_BIG dump"
+        required: true
+        type: string
+      expected_shards:
+        description: "Number of exact source partitions, 1 to 256"
+        required: true
+        default: "16"
+        type: string
+      shard_indices:
+        description: "Complete JSON list [0,1,...,N-1]"
+        required: true
+        default: "[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]"
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  frozen-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.vector_run_id }}
+          github-token: ${{ github.token }}
+          name: ${{ inputs.vector_artifact_name }}
+          path: build/vector
+      - name: Validate one source file and every requested shard index
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha256 }}
+          N: ${{ inputs.expected_shards }}
+          INDICES: ${{ inputs.shard_indices }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,re
+          files=list(pathlib.Path("build/vector").rglob("*.dump"))
+          assert len(files)==1,"REFUSE_NEED_ONE_HYBRID_BIG_DUMP"
+          content=files[0].read_bytes()
+          digest=hashlib.sha256(content).hexdigest()
+          assert re.fullmatch(r"[0-9a-fA-F]{64}",os.environ["EXPECTED_SHA"])
+          assert digest==os.environ["EXPECTED_SHA"].lower(),"REFUSE_SHA256_MISMATCH"
+          n=int(os.environ["N"])
+          assert 1<=n<=256 and json.loads(os.environ["INDICES"])==list(range(n)),"REFUSE_INCOMPLETE_SHARDS"
+          assert content.startswith(b"HYBRID_BIG|"),"REFUSE_UNRECOGNIZED_SOURCE"
+          print("VECTORCHECK_SOURCE|sha256="+digest+"|shards="+str(n)+"|status=PASS|json=0")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-locked-vector
+          path: build/vector/
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 60
+  independent-source:
+    needs: frozen-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: ${{ fromJSON(inputs.shard_indices) }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build standalone Rust 1.81 verifier only
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal
+          cargo +1.81.0 build --release --bin vectorcheck
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-locked-vector
+          path: build/vector
+      - name: Check complete independent S3 and raw electric rows for shard
+        env:
+          SHARD: ${{ matrix.shard }}
+          N: ${{ inputs.expected_shards }}
+          SHA: ${{ inputs.expected_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/checks
+          d="$(find build/vector -type f -name '*.dump')"
+          test -f "$d"
+          printf '%s  %s\n' "$SHA" "$d" | sha256sum -c --status
+          target/release/vectorcheck "$d" --shard="$SHARD/$N" | tee "build/checks/CHECK-SHARD-$SHARD.hbp"
+          grep -Fq 'result=PASS|scope=SHARD_ONLY|json=0' "build/checks/CHECK-SHARD-$SHARD.hbp"
+          echo "SOURCE_SHA256=$SHA" >> "build/checks/CHECK-SHARD-$SHARD.hbp"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-verified-shard-${{ matrix.shard }}
+          path: build/checks/CHECK-SHARD-${{ matrix.shard }}.hbp
+          if-no-files-found: error
+          retention-days: 60
+  independent-fanin:
+    needs: independent-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: vector-verified-shard-*
+          merge-multiple: true
+          path: build/fanin
+      - name: Require every shard with same SHA, count all raw moves, reject claim+1
+        env:
+          N: ${{ inputs.expected_shards }}
+          SHA: ${{ inputs.expected_sha256 }}
+        run: |
+          set -euo pipefail
+          python3 -I -B independent-gates/vectorcheck_fanin.py build/fanin "$N" "$SHA" | tee build/FINAL-VECTOR-CHECK.hbp
+          grep -Fq 'raised_claim_by_one_micro=REFUSED|all_sources=CHECKED|status=PASS|json=0' build/FINAL-VECTOR-CHECK.hbp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fully-independent-large-torus-Barta
+          path: build/FINAL-VECTOR-CHECK.hbp
+          if-no-files-found: error
+          retention-days: 90
