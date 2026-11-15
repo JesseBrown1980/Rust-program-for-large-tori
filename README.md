@@ -9,11 +9,23 @@ repository's no-store hybrid certificate
 ([`VECTOR-BOUND.md`](https://github.com/JesseBrown1980/Finite-universe-Yang-mills-existence-and-mass-gap-using-HEB-C/blob/main/native/ym/results/3x4_stream/perron/vector/VECTOR-BOUND.md));
 this repository is a new implementation of it without the two size limits of the present programs. Written by seat ACER-CLAUDE-FABLE52 at his direction, starting November 15, 2026.
 
-## Status: BUILT, first gates passed, large runs started. No 7×7 or 8×8 result yet.
+## Status: first certificates on 6×6, 7×7 and 8×8, as this program's own; independent check in progress
 
-`src/main.rs` (Rust 1.81, clippy clean, integers only) passed gates G1 to G3 on the operator's machine on November 15 ([`GATES-LOCAL-20261115.hbp`](GATES-LOCAL-20261115.hbp)). On 4×4 and 5×5 it finds exactly the class, configuration and move counts of the registered programs (825,865 / 624,556,872 / 79,283,040 and 473,677 / 563,254,650 / 71,051,550). Its certificates are 116.272217 (4×4, r = 9, cut 10), 103.500000 (4×4, r = 6, cut 14; registered 103.521056) and 168.001465 (5×5, r = 9, cut 11; registered 168.020667). Predictions for the larger tori are in [`PREDICTION-20261115.hbp`](PREDICTION-20261115.hbp), pushed before the cells were started. G4 runs in the cells; G5 (red controls) and an independent checker are open.
+Lower ends of E₉ − E₈ in J_E, measured on GitHub cells on November 15, 2026 with predictions pushed first ([`PREDICTION-20261115.hbp`](PREDICTION-20261115.hbp), [`RESULT-20261115.hbp`](RESULT-20261115.hbp)). On every row each lump inside the cut holds exactly its count of configurations.
 
-    large_tori LX LY R CUT THREADS SWEEPS auto [REPLAY_R,...]
+| Torus | r | Cut | Classes | E₉ − E₈ ≥ | 3r − 21/r | Time |
+|---|---:|---:|---:|---:|---:|---|
+| 6×6 | 9 | 11 | 2,257,839 | **16.904567** | 24.67 | 35 min |
+| 7×7 | 12 | 10 | 337,082 | **28.965224** | 35.25 | 1 min 40 s |
+| 7×7 | 16 | 10 | 337,082 | **45.207828** | 46.69 | 2 min 20 s |
+| 8×8 | 16 | 10 | 766,866 | **44.345382** | 46.69 | 5 min 21 s |
+| 8×8 | 24 | 10 | 766,866 | **70.648926** | 71.13 | 6 min 31 s |
+
+**What these are, and are not.** Each is a certificate printed by this one program for one finite torus. The program passed its gates G1 to G3 on 4×4 and 5×5 against the registered programs ([`GATES-LOCAL-20261115.hbp`](GATES-LOCAL-20261115.hbp): identical class, configuration and move counts, certificates within 0.02). GPT-6, on another model, has written a separate checker (pull request 4) and verified a 4×4 vector with it; the 6×6, 7×7 and 8×8 vectors have **not** been checked independently yet. The cells of `dump-cells.yml` rerun these points with the vector written out for that check. Gate G4 gave no comparison: the widened copies of the earlier tools return valid bounds far below the flat level on 6×6 (80.0 J_E where the flat level is 216), so they cannot confirm or contradict these numbers.
+
+Predictions: P1, P2, P4 met; P5 missed high (8×8 at r = 24 came in above the predicted band); P6 missed high on 8×8 (more classes than predicted); P3 pending.
+
+    large_tori LX LY R CUT THREADS SWEEPS auto [REPLAY_R,...] [dump=FILE]
 
 ## Why a new program
 

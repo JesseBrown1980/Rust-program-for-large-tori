@@ -1,0 +1,51 @@
+name: large tori, cells with the vector dump and the per-level rows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - TRIGGER-DUMP.txt
+
+permissions:
+  contents: read
+
+jobs:
+  point:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        args:
+          - "4 4 9 10"
+          - "5 5 9 11"
+          - "6 6 9 11"
+          - "7 7 12 10"
+          - "7 7 16 10"
+          - "8 8 16 10"
+          - "8 8 24 10"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Rust 1.81, clippy and build
+        run: |
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          sha256sum src/main.rs
+          cargo +1.81.0 clippy --release -- -D warnings
+          cargo +1.81.0 build --release
+      - name: the point, with its vector
+        run: |
+          set -- ${{ matrix.args }}
+          N=vector_${1}x${2}_r${3}_cut${4}.hbp
+          /usr/bin/time -v ./target/release/large_tori $1 $2 $3 $4 4 300 auto $3,$(( $3 + 1 )),$(( $3 + 4 )),$(( 2 * $3 )) dump=$N 2> time.txt | tee rows.hbp
+          grep -E "Elapsed|Maximum resident" time.txt | tee -a rows.hbp
+          grep -q "^BIG_CERT|" rows.hbp
+          echo "BIG_VECTOR|file=$N|bytes=$(stat -c%s $N)|sha256=$(sha256sum $N | cut -d' ' -f1)|json=0" | tee -a rows.hbp
+          gzip -9 $N
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vector-${{ strategy.job-index }}
+          path: |
+            rows.hbp
+            vector_*.hbp.gz
+          retention-days: 90
