@@ -1,0 +1,93 @@
+name: Issue3 independent whole original 5x5 r9 source
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/issue3-full-5x5-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independently-rebuild-rows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 43724776455
+          github-token: ${{ github.token }}
+          name: vector-1
+          path: build/frozen
+      - name: Require exact original 5x5 vector artifact, source SHA and producer claim
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import gzip,hashlib,pathlib
+          p=pathlib.Path("build/frozen")
+          name="vector_5x5_r9_cut11.hbp"
+          raw=gzip.decompress((p/(name+".gz")).read_bytes())
+          sha=hashlib.sha256(raw).hexdigest()
+          assert sha=="4ccd77902a2d6864d9b2831ec7b24277cb87bad7dc83f4ce3f8046bf6820a04d"
+          assert len(raw)==29376991
+          rows=(p/"rows.hbp").read_text()
+          expected="BIG_VECTOR|file="+name+"|bytes=29376991|sha256="+sha+"|json=0"
+          assert [x for x in rows.splitlines() if x.startswith("BIG_VECTOR|")]==[expected]
+          cert=[x for x in rows.splitlines() if x.startswith("BIG_CERT|")]
+          assert len(cert)==1 and "E9_lower_micro=168034092|" in cert[0]
+          assert "claim_micro=168034092|" in raw.split(b"\n",1)[0].decode("ascii")
+          (p/name).write_bytes(raw)
+          print("FIVE_SOURCE_LOCK|sha256="+sha+"|status=PASS|json=0")
+          PY
+      - name: Independent Rust 1.81 full source and high vertex proof, 1/16
+        env:
+          I: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --bin vectorcheck -- -D warnings
+          cargo +1.81.0 build --release --bin vectorcheck
+          mkdir -p build/checked
+          target/release/vectorcheck build/frozen/vector_5x5_r9_cut11.hbp --shard="$I/16" | tee "build/checked/CHECK-SHARD-$I.hbp"
+          grep -Fq 'classes_total=473677|' "build/checked/CHECK-SHARD-$I.hbp"
+          grep -Fq 'claim_micro=168034092|' "build/checked/CHECK-SHARD-$I.hbp"
+          grep -Fq 'max_targets=ACTUAL_LOW_ORBIT_MAX|S3=INDEPENDENT|canonical=INDEPENDENT|result=PASS|scope=SHARD_ONLY|json=0' "build/checked/CHECK-SHARD-$I.hbp"
+          echo 'SOURCE_SHA256=4ccd77902a2d6864d9b2831ec7b24277cb87bad7dc83f4ce3f8046bf6820a04d' >> "build/checked/CHECK-SHARD-$I.hbp"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-five-shard-${{ matrix.shard }}
+          path: build/checked/CHECK-SHARD-${{ matrix.shard }}.hbp
+          if-no-files-found: ignore
+          retention-days: 60
+  complete-source-fanin:
+    needs: independently-rebuild-rows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: independent-five-shard-*
+          path: build/receipts
+          merge-multiple: true
+      - name: Refuse missing classes/moves/source SHA or one micro-unit overclaim
+        run: |
+          set -euo pipefail
+          python3 -I -B independent-gates/vectorcheck_fanin.py build/receipts 16 4ccd77902a2d6864d9b2831ec7b24277cb87bad7dc83f4ce3f8046bf6820a04d | tee build/FULL-5X5.hbp
+          grep -Fq 'fully_checked_exact_classes=473677|fully_checked_raw_moves=71051550|' build/FULL-5X5.hbp
+          grep -Fq 'claim_micro=168034092|independent_min_micro=168034092|' build/FULL-5X5.hbp
+          grep -Fq 'raised_claim_by_one_micro=REFUSED|all_sources=CHECKED|status=PASS|json=0' build/FULL-5X5.hbp
+          echo 'SOURCE_SHA256=4ccd77902a2d6864d9b2831ec7b24277cb87bad7dc83f4ce3f8046bf6820a04d' >> build/FULL-5X5.hbp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-5x5-independent-complete-source
+          path: build/FULL-5X5.hbp
+          if-no-files-found: ignore
+          retention-days: 90
