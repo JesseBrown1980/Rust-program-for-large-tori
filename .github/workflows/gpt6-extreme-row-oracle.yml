@@ -48,6 +48,7 @@ jobs:
           grep -Fq 'EXTREME_ROW_ORACLE|L=5|mode=hybrid|' build/EXTREME-ROW-FULL.hbp
           grep -Fq 'all_integer_rows_dominate_relaxed_vertices=PASS|' build/EXTREME-ROW-FULL.hbp
           grep -Fq 'EXTREME_ROW_DONE|independent_S3_moves=PASS|' build/EXTREME-ROW-FULL.hbp
+          cmp build/EXTREME-ROW-FULL.hbp independent-gates/RESULT-EXTREME-ROW-FULL.hbp
       - uses: actions/upload-artifact@v4
         with:
           name: gpt6-independent-extreme-row-L5-exhaustive
