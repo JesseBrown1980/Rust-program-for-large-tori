@@ -1,0 +1,119 @@
+name: Issue3 verify ORIGINAL 4x4 and 7x7 frozen producer vectors
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/issue3-original-vector-pilot.yml'
+      - 'src/bin/vectorcheck.rs'
+      - 'independent-gates/vectorcheck_fanin.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-source-checker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - {case: "4x4-r9", artifact: "vector-0", file: "vector_4x4_r9_cut10.hbp", hash: "cec9477a13bf66dbed22b488eeacdb3b958ada1258bb92a112d39b8bf8821428", bytes: 539923, claim: 116272217, shard: 0, total: 4}
+          - {case: "4x4-r9", artifact: "vector-0", file: "vector_4x4_r9_cut10.hbp", hash: "cec9477a13bf66dbed22b488eeacdb3b958ada1258bb92a112d39b8bf8821428", bytes: 539923, claim: 116272217, shard: 1, total: 4}
+          - {case: "4x4-r9", artifact: "vector-0", file: "vector_4x4_r9_cut10.hbp", hash: "cec9477a13bf66dbed22b488eeacdb3b958ada1258bb92a112d39b8bf8821428", bytes: 539923, claim: 116272217, shard: 2, total: 4}
+          - {case: "4x4-r9", artifact: "vector-0", file: "vector_4x4_r9_cut10.hbp", hash: "cec9477a13bf66dbed22b488eeacdb3b958ada1258bb92a112d39b8bf8821428", bytes: 539923, claim: 116272217, shard: 3, total: 4}
+          - {case: "7x7-r12", artifact: "vector-3", file: "vector_7x7_r12_cut10.hbp", hash: "992019e5c231a36ba0f92689fe934905db02ca6d0ddb5dab2c1ac7fa4608f29d", bytes: 29094516, claim: 317469462, shard: 0, total: 64}
+          - {case: "7x7-r16", artifact: "vector-4", file: "vector_7x7_r16_cut10.hbp", hash: "e015d6c58515b166217c04e44cc8ad3050be78148a814b645936bcdb9ef0687d", bytes: 29005127, claim: 334903559, shard: 0, total: 64}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 43724776455
+          github-token: ${{ github.token }}
+          name: ${{ matrix.artifact }}
+          path: build/producer-original
+      - name: Verify source artifact receipt and decompress the original frozen HYBRID_BIG dump
+        env:
+          FILE: ${{ matrix.file }}
+          SHA: ${{ matrix.hash }}
+          BYTES: ${{ matrix.bytes }}
+          CLAIM: ${{ matrix.claim }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import gzip,hashlib,os,pathlib
+          folder=pathlib.Path("build/producer-original")
+          src=folder/(os.environ["FILE"]+".gz")
+          assert src.is_file(),"MISSING_EXPECTED_GZ_VECTOR"
+          raw=gzip.decompress(src.read_bytes())
+          assert len(raw)==int(os.environ["BYTES"]),"SOURCE_BYTE_COUNT_CHANGED"
+          sha=hashlib.sha256(raw).hexdigest()
+          assert sha==os.environ["SHA"],"SOURCE_SHA256_MISMATCH"
+          assert raw.startswith(b"HYBRID_BIG|"),"NOT_A_VECTOR_DUMP"
+          target=folder/os.environ["FILE"]
+          target.write_bytes(raw)
+          rows=(folder/"rows.hbp").read_text()
+          big=[x for x in rows.splitlines() if x.startswith("BIG_VECTOR|")]
+          assert len(big)==1,"MISSING_BIG_VECTOR_RECEIPT"
+          wanted="BIG_VECTOR|file="+os.environ["FILE"]+"|bytes="+os.environ["BYTES"]+"|sha256="+sha+"|json=0"
+          assert big[0]==wanted,"SOURCE_VECTOR_RECEIPT_MISMATCH"
+          cert=[x for x in rows.splitlines() if x.startswith("BIG_CERT|")]
+          assert len(cert)==1,"MISSING_PRODUCER_CERT"
+          assert "E9_lower_micro="+os.environ["CLAIM"]+"|" in cert[0],"PRODUCER_CLAIM_MISMATCH"
+          header=raw.split(b"\n",1)[0].decode("ascii")
+          assert "claim_micro="+os.environ["CLAIM"]+"|" in header,"DUMP_CLAIM_MISMATCH"
+          print("ARCHIVED_SOURCE_LOCK|file="+os.environ["FILE"]+"|sha256="+sha+
+                "|bytes="+os.environ["BYTES"]+"|claim="+os.environ["CLAIM"]+"|status=PASS|json=0")
+          PY
+      - name: Compile only the independent Rust checker under 1.81; no producer library
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --bin vectorcheck -- -D warnings
+          cargo +1.81.0 build --release --bin vectorcheck
+      - name: Independently verify complete above-cut polytope and disjoint real low-source shard
+        env:
+          FILE: ${{ matrix.file }}
+          SHA: ${{ matrix.hash }}
+          SHARD: ${{ matrix.shard }}
+          TOTAL: ${{ matrix.total }}
+          CLAIM: ${{ matrix.claim }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/checked
+          target/release/vectorcheck "build/producer-original/$FILE" --shard="$SHARD/$TOTAL" | tee "build/checked/CHECK-SHARD-$SHARD.hbp"
+          grep -Fq "claim_micro=$CLAIM|" "build/checked/CHECK-SHARD-$SHARD.hbp"
+          grep -Fq 'max_targets=ACTUAL_LOW_ORBIT_MAX|S3=INDEPENDENT|canonical=INDEPENDENT|result=PASS|scope=SHARD_ONLY|json=0' "build/checked/CHECK-SHARD-$SHARD.hbp"
+          echo "SOURCE_SHA256=$SHA" >> "build/checked/CHECK-SHARD-$SHARD.hbp"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-check-${{ matrix.case }}-${{ matrix.shard }}
+          path: build/checked/CHECK-SHARD-${{ matrix.shard }}.hbp
+          if-no-files-found: ignore
+          retention-days: 60
+  original-4x4-fanin:
+    needs: original-source-checker
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: original-check-4x4-r9-*
+          path: build/checks
+          merge-multiple: true
+      - name: Refuse an incomplete source; independent actual producer claim at 116272217
+        run: |
+          set -euo pipefail
+          python3 -I -B independent-gates/vectorcheck_fanin.py build/checks 4 cec9477a13bf66dbed22b488eeacdb3b958ada1258bb92a112d39b8bf8821428 | tee build/ORIGINAL-4X4-CHECK.hbp
+          grep -Fq 'claim_micro=116272217|independent_min_micro=116272217|' build/ORIGINAL-4X4-CHECK.hbp
+          grep -Fq 'raised_claim_by_one_micro=REFUSED|all_sources=CHECKED|status=PASS|json=0' build/ORIGINAL-4X4-CHECK.hbp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-producer-4x4-independently-verified
+          path: build/ORIGINAL-4X4-CHECK.hbp
+          if-no-files-found: ignore
+          retention-days: 90
